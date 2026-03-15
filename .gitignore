@@ -1,0 +1,45 @@
+# Build artifacts
+build/
+cpp/build/
+*.o
+*.a
+*.so
+*.dylib
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+venv/
+
+# Output
+output/
+separated/
+
+# Benchmark artifacts
+tools/.bench_output/
+
+# WIP folder
+.wip/
+
+# Model weights
+models/
+
+# Tool venvs
+tools/.venv/
+
+# Swift
+swift/.build/
+swift/.swiftpm/
