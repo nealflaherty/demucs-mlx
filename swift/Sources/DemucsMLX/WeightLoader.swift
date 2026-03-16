@@ -3,10 +3,10 @@
 
 import MLX
 
-public enum WeightLoader {
+enum WeightLoader {
 
     /// Load weights from a SafeTensors file into an HTDemucsModel.
-    public static func loadHTDemucs(
+    static func loadHTDemucs(
         _ model: inout HTDemucsModel, from path: String
     ) -> Bool {
         guard let file = SafeTensorsLoader.parse(path) else {
@@ -20,7 +20,7 @@ public enum WeightLoader {
 
     // MARK: - Map-based loading
 
-    public static func loadHTDemucsFromMap(
+    static func loadHTDemucsFromMap(
         _ model: inout HTDemucsModel,
         weights: [String: MLXArray]
     ) -> Bool {

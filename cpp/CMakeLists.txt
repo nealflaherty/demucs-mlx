@@ -55,6 +55,7 @@ set(SOURCES
     demucs/weight_loader.cpp
     demucs/audio.cpp
     demucs/apply.cpp
+    demucs/demucs_api.cpp
 )
 
 # Create library

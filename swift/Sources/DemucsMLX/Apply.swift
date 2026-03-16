@@ -7,12 +7,12 @@ import Foundation
 // MARK: - TensorChunk
 
 /// A view into a tensor along the last dimension.
-public struct TensorChunk {
-    public let tensor: MLXArray
-    public let offset: Int
-    public let length: Int
+struct TensorChunk {
+    let tensor: MLXArray
+    let offset: Int
+    let length: Int
 
-    public init(_ tensor: MLXArray, offset: Int = 0, length: Int = -1) {
+    init(_ tensor: MLXArray, offset: Int = 0, length: Int = -1) {
         self.tensor = tensor
         self.offset = offset
         let totalLength = tensor.shape[tensor.ndim - 1]
@@ -24,7 +24,7 @@ public struct TensorChunk {
     }
 
     /// Pad/extract a region of target_length centered on this chunk.
-    public func padded(_ targetLength: Int) -> MLXArray {
+    func padded(_ targetLength: Int) -> MLXArray {
         let delta = targetLength - length
         let totalLength = tensor.shape[tensor.ndim - 1]
 
@@ -50,7 +50,7 @@ public struct TensorChunk {
 // MARK: - Utilities
 
 /// Trim the last dimension to `reference` length, centered.
-public func centerTrim(_ tensor: MLXArray, _ reference: Int) -> MLXArray {
+func centerTrim(_ tensor: MLXArray, _ reference: Int) -> MLXArray {
     let delta = tensor.shape[tensor.ndim - 1] - reference
     if delta <= 0 { return tensor }
     let trimLeft = delta / 2
@@ -61,7 +61,7 @@ public func centerTrim(_ tensor: MLXArray, _ reference: Int) -> MLXArray {
 }
 
 /// Prevent clipping in output audio.
-public func preventClip(_ wav: MLXArray, mode: String = "rescale") -> MLXArray {
+func preventClip(_ wav: MLXArray, mode: String = "rescale") -> MLXArray {
     switch mode {
     case "none":
         return wav
@@ -82,14 +82,15 @@ public func preventClip(_ wav: MLXArray, mode: String = "rescale") -> MLXArray {
 // MARK: - Apply model
 
 /// Run the model on a chunk, with optional shifts and splitting.
-public func applyModelChunk(
+func applyModelChunk(
     _ model: inout HTDemucsModel,
     chunk: TensorChunk,
     shifts: Int = 0,
     split: Bool = true,
     overlap: Float = 0.25,
     transitionPower: Float = 1.0,
-    segment: Float = -1
+    segment: Float = -1,
+    progress: ((Float, String) -> Void)? = nil
 ) -> MLXArray {
     let length = chunk.length
     let samplerate = 44100
@@ -109,7 +110,7 @@ public func applyModelChunk(
             var res = applyModelChunk(&model, chunk: shifted, shifts: 0,
                                       split: split, overlap: overlap,
                                       transitionPower: transitionPower,
-                                      segment: segment)
+                                      segment: segment, progress: progress)
             let trimStart = maxShift - offset
             res = sliceAxis(res, axis: -1, start: trimStart, end: trimStart + length)
             out = out + res
@@ -144,11 +145,13 @@ public func applyModelChunk(
             let subChunk = TensorChunk(mixTensor, offset: offset, length: segmentLength)
 
             print("  Processing chunk at \(offset)/\(length) (\(100 * offset / length)%)")
+            let pct = Float(offset) / Float(length)
+            progress?(pct, "Processing chunk \(offset)/\(length) (\(Int(pct * 100))%)")
 
             let chunkOut = applyModelChunk(&model, chunk: subChunk, shifts: 0,
                                            split: false, overlap: overlap,
                                            transitionPower: transitionPower,
-                                           segment: segment)
+                                           segment: segment, progress: progress)
             eval(chunkOut)
 
             let chunkLength = chunkOut.shape[chunkOut.ndim - 1]
@@ -188,20 +191,21 @@ public func applyModelChunk(
 }
 
 /// Top-level entry point.
-public func applyModel(
+func applyModel(
     _ model: inout HTDemucsModel,
     mix: MLXArray,
     shifts: Int = 0,
     split: Bool = true,
     overlap: Float = 0.25,
     transitionPower: Float = 1.0,
-    segment: Float = -1
+    segment: Float = -1,
+    progress: ((Float, String) -> Void)? = nil
 ) -> MLXArray {
     let chunk = TensorChunk(mix)
     return applyModelChunk(&model, chunk: chunk, shifts: shifts,
                            split: split, overlap: overlap,
                            transitionPower: transitionPower,
-                           segment: segment)
+                           segment: segment, progress: progress)
 }
 
 // MARK: - Simple LCG RNG for reproducibility

@@ -98,6 +98,26 @@ else
     dim "Swift binary already built at swift/.build/release/demucs-separate"
 fi
 
+# Ensure MLX metallib is colocated with the Swift binary.
+# SwiftPM doesn't compile .metal kernels, so we copy the metallib
+# produced by the C++ CMake build next to the Swift executable.
+SWIFT_BIN_DIR="$(dirname "$SWIFT_BINARY")"
+if [ ! -f "$SWIFT_BIN_DIR/mlx.metallib" ]; then
+    # Try both possible C++ build directories
+    for candidate in "$PROJECT_DIR/build/third_party/mlx/mlx/backend/metal/kernels/mlx.metallib" \
+                     "$PROJECT_DIR/cpp/build/third_party/mlx/mlx/backend/metal/kernels/mlx.metallib"; do
+        if [ -f "$candidate" ]; then
+            bold "Copying mlx.metallib next to Swift binary..."
+            cp "$candidate" "$SWIFT_BIN_DIR/mlx.metallib"
+            break
+        fi
+    done
+    if [ ! -f "$SWIFT_BIN_DIR/mlx.metallib" ]; then
+        red "Warning: mlx.metallib not found. Swift benchmark may fail."
+        red "Build the C++ target first to generate the metallib."
+    fi
+fi
+
 if [ ! -f "$MODEL_PATH" ]; then
     red "Error: model weights not found at $MODEL_PATH"
     echo "Run: python tools/convert_model.py"

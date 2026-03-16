@@ -7,31 +7,31 @@ import Foundation
 // MARK: - Weight metadata
 
 /// Metadata for a single tensor in a SafeTensors file.
-public struct WeightMetadata {
-    public let name: String
-    public let shape: [Int]
-    public let dtype: String
-    public let dataOffsetStart: Int
-    public let dataOffsetEnd: Int
+struct WeightMetadata {
+    let name: String
+    let shape: [Int]
+    let dtype: String
+    let dataOffsetStart: Int
+    let dataOffsetEnd: Int
 
-    public var sizeBytes: Int { dataOffsetEnd - dataOffsetStart }
+    var sizeBytes: Int { dataOffsetEnd - dataOffsetStart }
 }
 
 // MARK: - SafeTensors file
 
 /// Parsed SafeTensors file header.
-public struct SafeTensorsFile {
-    public let tensors: [String: WeightMetadata]
-    public let headerSize: Int
-    public let filePath: String
+struct SafeTensorsFile {
+    let tensors: [String: WeightMetadata]
+    let headerSize: Int
+    let filePath: String
 }
 
 // MARK: - SafeTensors loader
 
-public enum SafeTensorsLoader {
+enum SafeTensorsLoader {
 
     /// Parse a SafeTensors file header. Returns nil on error.
-    public static func parse(_ path: String) -> SafeTensorsFile? {
+    static func parse(_ path: String) -> SafeTensorsFile? {
         guard let fileHandle = FileHandle(forReadingAtPath: path) else {
             print("SafeTensors: failed to open \(path)")
             return nil
@@ -84,7 +84,7 @@ public enum SafeTensorsLoader {
     }
 
     /// Load a specific tensor by name.
-    public static func loadTensor(_ file: SafeTensorsFile, name: String) -> MLXArray? {
+    static func loadTensor(_ file: SafeTensorsFile, name: String) -> MLXArray? {
         guard let meta = file.tensors[name] else {
             print("SafeTensors: tensor not found: \(name)")
             return nil
@@ -125,7 +125,7 @@ public enum SafeTensorsLoader {
     }
 
     /// Load all tensors from a SafeTensors file.
-    public static func loadAll(_ file: SafeTensorsFile) -> [String: MLXArray] {
+    static func loadAll(_ file: SafeTensorsFile) -> [String: MLXArray] {
         var result = [String: MLXArray]()
         for (name, _) in file.tensors {
             if let tensor = loadTensor(file, name: name) {
@@ -162,7 +162,7 @@ public enum SafeTensorsLoader {
     }
 
     /// Print file info for debugging.
-    public static func printInfo(_ file: SafeTensorsFile) {
+    static func printInfo(_ file: SafeTensorsFile) {
         print("SafeTensors file: \(file.filePath)")
         print("Header size: \(file.headerSize) bytes")
         print("Number of tensors: \(file.tensors.count)")

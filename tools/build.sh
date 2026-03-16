@@ -35,6 +35,13 @@ esac
 
 bold "=== Build ($BUILD_TYPE) ==="
 
+# Initialize MLX submodule if needed
+MLX_DIR="$PROJECT_DIR/cpp/third_party/mlx"
+if [ ! -f "$MLX_DIR/CMakeLists.txt" ]; then
+    bold "Initializing MLX submodule..."
+    git -C "$PROJECT_DIR" submodule update --init --recursive cpp/third_party/mlx
+fi
+
 # Download model if missing
 MODEL_PATH="$PROJECT_DIR/models/htdemucs.safetensors"
 if [ ! -f "$MODEL_PATH" ]; then
@@ -46,6 +53,7 @@ if [ ! -f "$BUILD_DIR/CMakeCache.txt" ]; then
     bold "Configuring..."
     cmake -S "$PROJECT_DIR/cpp" -B "$BUILD_DIR" \
         -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
         -DBUILD_TESTS=ON
 fi
 

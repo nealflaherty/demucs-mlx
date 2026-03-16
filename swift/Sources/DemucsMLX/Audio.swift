@@ -7,6 +7,11 @@ import AVFoundation
 
 public enum AudioIO {
 
+    /// Load an audio file from a URL.
+    public static func load(_ url: URL, targetSampleRate: Int = 44100) -> MLXArray? {
+        return load(url.path, targetSampleRate: targetSampleRate)
+    }
+
     /// Load an audio file, convert to stereo float32 at the target sample rate.
     /// Returns MLXArray of shape (2, samples) or nil on error.
     public static func load(_ path: String, targetSampleRate: Int = 44100) -> MLXArray? {
@@ -120,6 +125,16 @@ public enum AudioIO {
     }
 
     // MARK: - Save
+
+    /// Save audio to a URL. Supports .wav, .m4a (AAC), .flac, .alac.
+    public static func save(_ url: URL, audio: MLXArray,
+                            sampleRate: Int = 44100, bitsPerSample: Int = 16,
+                            asFloat: Bool = false, bitrate: Int = 128,
+                            codec: String = "") -> Bool {
+        return save(url.path, audio: audio, sampleRate: sampleRate,
+                    bitsPerSample: bitsPerSample, asFloat: asFloat,
+                    bitrate: bitrate, codec: codec)
+    }
 
     /// Save audio to file. Supports .wav, .m4a (AAC), .flac, .alac.
     /// audio shape: (2, samples) or (1, 2, samples).

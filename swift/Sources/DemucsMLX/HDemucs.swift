@@ -47,7 +47,7 @@ private func reflectPad1D(_ x: MLXArray, padLeft: Int, padRight: Int) -> MLXArra
 
 /// Pad a 1D tensor with reflection or constant padding.
 /// Matches pad1d() from hdemucs.py / hdemucs.cpp.
-public func pad1d(_ x: MLXArray, paddingLeft: Int, paddingRight: Int,
+func pad1d(_ x: MLXArray, paddingLeft: Int, paddingRight: Int,
                    mode: String = "constant", value: Float = 0.0) -> MLXArray {
     let shape = x.shape
     let length = shape.last!
@@ -88,11 +88,11 @@ public func pad1d(_ x: MLXArray, paddingLeft: Int, paddingRight: Int,
 // MARK: - ScaledEmbedding
 
 /// Scaled embedding layer matching C++ ScaledEmbedding.
-public struct ScaledEmbedding {
-    public var embeddingWeight: MLXArray
+struct ScaledEmbedding {
+    var embeddingWeight: MLXArray
     let scale: Float
 
-    public init(numEmbeddings: Int, embeddingDim: Int,
+    init(numEmbeddings: Int, embeddingDim: Int,
                 scale: Float = 10.0, smooth: Bool = false) {
         var w = MLXRandom.normal([numEmbeddings, embeddingDim])
         if smooth {
@@ -105,12 +105,12 @@ public struct ScaledEmbedding {
         self.scale = scale
     }
 
-    public func forward(_ x: MLXArray) -> MLXArray {
+    func forward(_ x: MLXArray) -> MLXArray {
         let emb = take(embeddingWeight, x, axis: 0)
         return emb * MLXArray(scale)
     }
 
-    public func weight() -> MLXArray {
+    func weight() -> MLXArray {
         return embeddingWeight * MLXArray(scale)
     }
 }
@@ -119,16 +119,16 @@ public struct ScaledEmbedding {
 // MARK: - HEncLayer
 
 /// Encoder layer matching C++ HEncLayer.
-public struct HEncLayer {
-    public var convWeight: MLXArray
-    public var convBias: MLXArray
-    public var norm1Weight: MLXArray
-    public var norm1Bias: MLXArray
-    public var rewriteWeight: MLXArray
-    public var rewriteBias: MLXArray
-    public var norm2Weight: MLXArray
-    public var norm2Bias: MLXArray
-    public var dconv: DConvBlock?
+struct HEncLayer {
+    var convWeight: MLXArray
+    var convBias: MLXArray
+    var norm1Weight: MLXArray
+    var norm1Bias: MLXArray
+    var rewriteWeight: MLXArray
+    var rewriteBias: MLXArray
+    var norm2Weight: MLXArray
+    var norm2Bias: MLXArray
+    var dconv: DConvBlock?
 
     let freq: Bool
     let kernelSize: Int
@@ -140,7 +140,7 @@ public struct HEncLayer {
     let rewrite: Bool
     let normGroups: Int
 
-    public init(chin: Int, chout: Int, kernelSize: Int = 8, stride: Int = 4,
+    init(chin: Int, chout: Int, kernelSize: Int = 8, stride: Int = 4,
                 normGroups: Int = 1, empty: Bool = false, freq: Bool = false,
                 dconvEnabled: Bool = true, norm: Bool = true, context: Int = 0,
                 pad: Bool = true, rewrite: Bool = true,
@@ -181,7 +181,7 @@ public struct HEncLayer {
         }
     }
 
-    public func forward(_ x: MLXArray, inject: MLXArray? = nil) -> MLXArray {
+    func forward(_ x: MLXArray, inject: MLXArray? = nil) -> MLXArray {
         var y = x
 
         // Flatten freq dims for time branch
@@ -260,16 +260,16 @@ public struct HEncLayer {
 // MARK: - HDecLayer
 
 /// Decoder layer matching C++ HDecLayer.
-public struct HDecLayer {
-    public var convTrWeight: MLXArray
-    public var convTrBias: MLXArray
-    public var norm2Weight: MLXArray
-    public var norm2Bias: MLXArray
-    public var rewriteWeight: MLXArray
-    public var rewriteBias: MLXArray
-    public var norm1Weight: MLXArray
-    public var norm1Bias: MLXArray
-    public var dconv: DConvBlock?
+struct HDecLayer {
+    var convTrWeight: MLXArray
+    var convTrBias: MLXArray
+    var norm2Weight: MLXArray
+    var norm2Bias: MLXArray
+    var rewriteWeight: MLXArray
+    var rewriteBias: MLXArray
+    var norm1Weight: MLXArray
+    var norm1Bias: MLXArray
+    var dconv: DConvBlock?
 
     let last: Bool
     let freq: Bool
@@ -284,7 +284,7 @@ public struct HDecLayer {
     let normGroups: Int
     let pad: Int
 
-    public init(chin: Int, chout: Int, last: Bool = false, kernelSize: Int = 8,
+    init(chin: Int, chout: Int, last: Bool = false, kernelSize: Int = 8,
                 stride: Int = 4, normGroups: Int = 1, empty: Bool = false,
                 freq: Bool = false, dconvEnabled: Bool = true, norm: Bool = true,
                 context: Int = 1, pad: Bool = true, contextFreq: Bool = true,
@@ -334,7 +334,7 @@ public struct HDecLayer {
     }
 
     /// Returns (output, pre-conv-transpose tensor for skip connections).
-    public func forward(_ x: MLXArray, skip: MLXArray, length: Int) -> (MLXArray, MLXArray) {
+    func forward(_ x: MLXArray, skip: MLXArray, length: Int) -> (MLXArray, MLXArray) {
         var y = x
 
         // Reshape for freq branch

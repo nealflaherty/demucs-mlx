@@ -3,10 +3,7 @@
 //
 // Usage: demucs_separate [options] <track1> [track2] ...
 
-#include "htdemucs.hpp"
-#include "audio.hpp"
-#include "weight_loader.hpp"
-#include "apply.hpp"
+#include "demucs_api.hpp"
 #include <mlx/mlx.h>
 #include <iostream>
 #include <filesystem>
@@ -16,6 +13,7 @@
 
 namespace fs = std::filesystem;
 namespace mx = mlx::core;
+namespace api = demucs::api;
 
 struct Args {
     std::vector<std::string> tracks;
@@ -60,7 +58,7 @@ void print_usage(const char* prog) {
     std::cout << "Usage: " << prog << " [options] <track1> [track2] ...\n"
               << "\nOptions:\n"
               << "  -o, --out DIR          Output directory (default: separated/htdemucs)\n"
-              << "  --model PATH           Model weights path (default: models/htdemucs_pytorch.safetensors)\n"
+              << "  --model PATH           Model weights path (default: models/htdemucs.safetensors)\n"
               << "  --filename PATTERN     Output filename pattern (default: {track}/{stem}.{ext})\n"
               << "                         Variables: {track}, {trackext}, {stem}, {ext}\n"
               << "  --shifts N             Number of random shifts (default: 1)\n"
@@ -135,14 +133,6 @@ Args parse_args(int argc, char* argv[]) {
     return args;
 }
 
-static void save_stem(const mx::array& source, const std::string& path,
-                      const Args& args) {
-    auto clipped = demucs::prevent_clip(source, args.clip_mode);
-    mx::eval(clipped);
-    demucs::Audio::save(path, clipped, 44100, args.bits_per_sample,
-                        args.float32, args.bitrate, args.format);
-}
-
 int main(int argc, char* argv[]) {
     Args args = parse_args(argc, argv);
     
@@ -153,78 +143,39 @@ int main(int argc, char* argv[]) {
     }
     
     // Validate --two-stems
-    std::vector<std::string> sources = {"drums", "bass", "other", "vocals"};
     if (!args.two_stems.empty()) {
-        auto it = std::find(sources.begin(), sources.end(), args.two_stems);
-        if (it == sources.end()) {
+        auto it = std::find(api::default_sources.begin(), api::default_sources.end(), args.two_stems);
+        if (it == api::default_sources.end()) {
             std::cerr << "Error: stem \"" << args.two_stems
                       << "\" is not in model. Must be one of: ";
-            for (size_t i = 0; i < sources.size(); ++i) {
+            for (size_t i = 0; i < api::default_sources.size(); ++i) {
                 if (i > 0) std::cerr << ", ";
-                std::cerr << sources[i];
+                std::cerr << api::default_sources[i];
             }
             std::cerr << std::endl;
             return 1;
         }
     }
     
-    // Create model with htdemucs defaults
-    demucs::HTDemucs model(
-        sources,
-        /*audio_channels=*/2,
-        /*channels=*/48,
-        /*channels_time=*/-1,
-        /*growth=*/2.0f,
-        /*nfft=*/4096,
-        /*cac=*/true,
-        /*depth=*/4,
-        /*rewrite=*/true,
-        /*freq_emb=*/0.2f,
-        /*emb_scale=*/10.0f,
-        /*emb_smooth=*/true,
-        /*kernel_size=*/8,
-        /*time_stride=*/2,
-        /*stride=*/4,
-        /*context=*/1,
-        /*context_enc=*/0,
-        /*norm_starts=*/4,
-        /*norm_groups=*/4,
-        /*dconv_mode=*/3,
-        /*dconv_depth=*/2,
-        /*dconv_comp=*/8,
-        /*dconv_attn=*/4,
-        /*dconv_lstm=*/4,
-        /*dconv_init=*/1e-3f,
-        /*bottom_channels=*/512,
-        /*t_layers=*/5,
-        /*t_heads=*/8,
-        /*t_hidden_scale=*/4.0f,
-        /*t_dropout=*/0.0f,
-        /*t_norm_in=*/true,
-        /*t_norm_out=*/true,
-        /*t_cross_first=*/false,
-        /*t_layer_scale=*/true,
-        /*t_gelu=*/true,
-        /*samplerate=*/44100,
-        /*segment=*/7.8f
-    );
-    
-    // Load weights
-    if (!fs::exists(args.model_path)) {
-        std::cerr << "Error: model file not found: " << args.model_path << std::endl;
-        std::cerr << std::endl;
-        std::cerr << "Download the model first:" << std::endl;
-        std::cerr << "  ./tools/download_model.sh" << std::endl;
-        std::cerr << std::endl;
-        std::cerr << "Or specify a path with --model <path>" << std::endl;
+    // Load model via the public API
+    std::unique_ptr<api::DemucsModel> model;
+    try {
+        if (!fs::exists(args.model_path)) {
+            std::cerr << "Error: model file not found: " << args.model_path << std::endl;
+            std::cerr << std::endl;
+            std::cerr << "Download the model first:" << std::endl;
+            std::cerr << "  ./tools/download_model.sh" << std::endl;
+            std::cerr << std::endl;
+            std::cerr << "Or specify a path with --model <path>" << std::endl;
+            return 1;
+        }
+        std::cout << "Loading model weights from " << args.model_path << "..." << std::endl;
+        model = api::load_model(args.model_path);
+        std::cout << "Model loaded." << std::endl;
+    } catch (const api::DemucsError& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
         return 1;
     }
-    std::cout << "Loading model weights from " << args.model_path << "..." << std::endl;
-    if (!demucs::WeightLoader::load_htdemucs_weights(model, args.model_path)) {
-        std::cerr << "Failed to load weights!" << std::endl;
-        return 1;
-    }
-    std::cout << "Model loaded." << std::endl;
     
     // Create output directory
     fs::create_directories(args.out_dir);
@@ -234,6 +185,14 @@ int main(int argc, char* argv[]) {
     // For ALAC, the file extension is .m4a (ALAC in M4A container)
     std::string file_ext = (ext == "alac") ? "m4a" : ext;
 
+    // Build separation options
+    api::SeparationOptions options;
+    options.shifts = args.shifts;
+    options.split = args.split;
+    options.overlap = args.overlap;
+    options.segment = args.segment;
+    options.clip_mode = args.clip_mode;
+
     for (const auto& track_path : args.tracks) {
         if (!fs::exists(track_path)) {
             std::cerr << "File " << track_path << " does not exist." << std::endl;
@@ -242,45 +201,6 @@ int main(int argc, char* argv[]) {
         
         std::cout << "Separating track " << track_path << std::endl;
         
-        // Load audio
-        auto audio_opt = demucs::Audio::load(track_path, 44100);
-        if (!audio_opt) {
-            std::cerr << "Failed to load audio: " << track_path << std::endl;
-            continue;
-        }
-        auto wav = *audio_opt;  // shape: (2, samples)
-        
-        // Python: ref = wav.mean(0); wav -= ref.mean(); wav /= ref.std() + 1e-8
-        auto ref = mx::mean(wav, 0);
-        auto ref_mean = mx::mean(ref);
-        auto ref_var = mx::var(ref, /*keepdims=*/false, /*ddof=*/1);
-        auto ref_std = mx::sqrt(ref_var);
-        mx::eval(ref_mean);
-        mx::eval(ref_std);
-        
-        wav = wav - ref_mean;
-        wav = wav / (ref_std + 1e-8f);
-        mx::eval(wav);
-        
-        int length = wav.shape(-1);
-        auto mix = mx::expand_dims(wav, 0);
-        
-        // Apply model
-        std::cout << "Running separation..." << std::endl;
-        auto out = demucs::apply_model(model, mix, args.shifts, args.split,
-                                        args.overlap, 1.0f, args.segment);
-        mx::eval(out);
-        
-        // Denormalize
-        out = out * (ref_std + 1e-8f);
-        out = out + ref_mean;
-        mx::eval(out);
-        
-        // Also denormalize original wav for --other-method minus
-        wav = wav * (ref_std + 1e-8f);
-        wav = wav + ref_mean;
-        mx::eval(wav);
-        
         // Parse track name parts for filename template
         std::string track_name = fs::path(track_path).stem().string();
         std::string track_ext_str = fs::path(track_path).extension().string();
@@ -288,23 +208,66 @@ int main(int argc, char* argv[]) {
             track_ext_str = track_ext_str.substr(1);
         }
         
-        // out shape: (1, 4, 2, length)
         if (args.two_stems.empty()) {
-            // Save all stems
-            for (size_t s = 0; s < sources.size(); ++s) {
-                auto source = mx::slice(out,
-                    {0, static_cast<int>(s), 0, 0},
-                    {1, static_cast<int>(s) + 1, 2, out.shape(-1)});
-                source = mx::squeeze(source, {0, 1});
+            // Use the Separator convenience class for the simple case
+            try {
+                api::Separator separator;
+                separator.load_model(args.model_path);
                 
-                std::string stem_path = args.out_dir + "/" +
-                    format_filename(args.filename, track_name, track_ext_str,
-                                    sources[s], file_ext);
-                fs::create_directories(fs::path(stem_path).parent_path());
-                save_stem(source, stem_path, args);
+                auto result = separator.separate(track_path, options,
+                    [](float pct, const std::string& msg) {
+                        std::cout << "\r  " << msg << " (" << static_cast<int>(pct * 100) << "%)" << std::flush;
+                    });
+                std::cout << std::endl;
+                
+                for (const auto& stem : result.stems) {
+                    std::string stem_path = args.out_dir + "/" +
+                        format_filename(args.filename, track_name, track_ext_str,
+                                        stem.name, file_ext);
+                    fs::create_directories(fs::path(stem_path).parent_path());
+                    api::save_audio(stem_path, stem.audio, 44100, "none",
+                                    args.bits_per_sample, args.float32, args.bitrate, args.format);
+                }
+            } catch (const api::DemucsError& e) {
+                std::cerr << "Error separating " << track_path << ": " << e.what() << std::endl;
+                continue;
             }
         } else {
-            // Two-stems mode: save selected stem and optionally no_stem
+            // Two-stems mode: use lower-level API for more control
+            auto audio_opt = api::load_audio(track_path, 44100);
+            if (!audio_opt) {
+                std::cerr << "Failed to load audio: " << track_path << std::endl;
+                continue;
+            }
+            auto wav = *audio_opt;
+            
+            // Normalize
+            auto ref = mx::mean(wav, 0);
+            auto ref_mean = mx::mean(ref);
+            auto ref_var = mx::var(ref, /*keepdims=*/false, /*ddof=*/1);
+            auto ref_std = mx::sqrt(ref_var);
+            mx::eval(ref_mean);
+            mx::eval(ref_std);
+            
+            wav = wav - ref_mean;
+            wav = wav / (ref_std + 1e-8f);
+            mx::eval(wav);
+            
+            auto mix = mx::expand_dims(wav, 0);
+            
+            std::cout << "Running separation..." << std::endl;
+            auto out = api::apply_model(*model, mix, args.shifts, args.split,
+                                         args.overlap, 1.0f, args.segment);
+            mx::eval(out);
+            
+            // Denormalize
+            out = out * (ref_std + 1e-8f) + ref_mean;
+            mx::eval(out);
+            
+            wav = wav * (ref_std + 1e-8f) + ref_mean;
+            mx::eval(wav);
+            
+            const auto& sources = model->sources();
             int stem_idx = -1;
             for (size_t s = 0; s < sources.size(); ++s) {
                 if (sources[s] == args.two_stems) { stem_idx = static_cast<int>(s); break; }
@@ -320,19 +283,19 @@ int main(int argc, char* argv[]) {
                 format_filename(args.filename, track_name, track_ext_str,
                                 args.two_stems, file_ext);
             fs::create_directories(fs::path(stem_path).parent_path());
-            save_stem(selected, stem_path, args);
+            api::save_audio(stem_path, selected, 44100, args.clip_mode,
+                            args.bits_per_sample, args.float32, args.bitrate, args.format);
             
             // Compute and save the complement
             if (args.other_method == "minus") {
-                // no_stem = original - stem
                 auto complement = wav - selected;
                 std::string comp_path = args.out_dir + "/" +
                     format_filename(args.filename, track_name, track_ext_str,
                                     "no_" + args.two_stems, file_ext);
                 fs::create_directories(fs::path(comp_path).parent_path());
-                save_stem(complement, comp_path, args);
+                api::save_audio(comp_path, complement, 44100, args.clip_mode,
+                                args.bits_per_sample, args.float32, args.bitrate, args.format);
             } else if (args.other_method == "add") {
-                // no_stem = sum of all other stems
                 mx::array complement = mx::zeros({2, out.shape(-1)});
                 for (size_t s = 0; s < sources.size(); ++s) {
                     if (static_cast<int>(s) == stem_idx) continue;
@@ -347,9 +310,9 @@ int main(int argc, char* argv[]) {
                     format_filename(args.filename, track_name, track_ext_str,
                                     "no_" + args.two_stems, file_ext);
                 fs::create_directories(fs::path(comp_path).parent_path());
-                save_stem(complement, comp_path, args);
+                api::save_audio(comp_path, complement, 44100, args.clip_mode,
+                                args.bits_per_sample, args.float32, args.bitrate, args.format);
             }
-            // other_method == "none": don't save complement
         }
         
         std::cout << "Saved stems to " << args.out_dir << "/" << track_name << "/" << std::endl;

@@ -35,7 +35,7 @@ private func periodicHannWindow(_ n: Int) -> [Float] {
 // MARK: - spectro (STFT)
 
 /// Short-Time Fourier Transform matching the C++ `spectro()`.
-public func spectro(_ x: MLXArray, nFFT: Int, hopLength: Int = -1, pad: Int = 0) -> MLXArray {
+func spectro(_ x: MLXArray, nFFT: Int, hopLength: Int = -1, pad: Int = 0) -> MLXArray {
     let hopLen = hopLength < 0 ? nFFT / 4 : hopLength
     let shape = x.shape
     let length = shape.last!
@@ -158,7 +158,7 @@ public func spectro(_ x: MLXArray, nFFT: Int, hopLength: Int = -1, pad: Int = 0)
 // MARK: - ispectro (inverse STFT)
 
 /// Inverse Short-Time Fourier Transform matching the C++ `ispectro()`.
-public func ispectro(_ z: MLXArray, hopLength: Int = -1, length: Int = 0, pad: Int = 0) -> MLXArray {
+func ispectro(_ z: MLXArray, hopLength: Int = -1, length: Int = 0, pad: Int = 0) -> MLXArray {
     let shape = z.shape
     let freqs = shape[shape.count - 2]
     let frames = shape[shape.count - 1]

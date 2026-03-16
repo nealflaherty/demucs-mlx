@@ -11,7 +11,7 @@ import MLX
 
 /// Slice an array along a specific axis from `start` to `end`.
 /// This replaces `x[startVec, endVec]` style indexing which MLX Swift doesn't support.
-public func sliceAxis(_ x: MLXArray, axis: Int, start: Int, end: Int) -> MLXArray {
+func sliceAxis(_ x: MLXArray, axis: Int, start: Int, end: Int) -> MLXArray {
     let ax = axis < 0 ? x.ndim + axis : axis
     var indices = [MLXArrayIndex]()
     for i in 0..<x.ndim {
@@ -28,7 +28,7 @@ public func sliceAxis(_ x: MLXArray, axis: Int, start: Int, end: Int) -> MLXArra
 
 /// GELU activation using the tanh approximation matching PyTorch.
 /// `0.5 * x * (1 + tanh(sqrt(2/π) * (x + 0.044715 * x³)))`
-public func gelu(_ x: MLXArray) -> MLXArray {
+func gelu(_ x: MLXArray) -> MLXArray {
     let sqrt2OverPi: Float = 0.7978845608
     let coeff: Float = 0.044715
 
@@ -45,7 +45,7 @@ public func gelu(_ x: MLXArray) -> MLXArray {
 // MARK: - GLU (Gated Linear Unit)
 
 /// Splits input in half along `axis` and returns `a * sigmoid(b)`.
-public func glu(_ x: MLXArray, axis: Int = 1) -> MLXArray {
+func glu(_ x: MLXArray, axis: Int = 1) -> MLXArray {
     let splits = MLX.split(x, parts: 2, axis: axis)
     let a = splits[0]
     let b = splits[1]
@@ -56,7 +56,7 @@ public func glu(_ x: MLXArray, axis: Int = 1) -> MLXArray {
 
 /// Conv1d with PyTorch format conversion.
 /// Input: (N, C, L), Weight: (O, I, K) → MLX layout → result back to (N, C, L).
-public func conv1d(
+func conv1d(
     _ input: MLXArray, weight: MLXArray, bias: MLXArray? = nil,
     stride: Int = 1, padding: Int = 0, dilation: Int = 1, groups: Int = 1
 ) -> MLXArray {
@@ -82,7 +82,7 @@ public func conv1d(
 
 /// ConvTranspose1d with PyTorch format conversion.
 /// Input: (N, C, L), Weight: (C_in, C_out, K) → MLX layout → result back to (N, C, L).
-public func convTranspose1d(
+func convTranspose1d(
     _ input: MLXArray, weight: MLXArray, bias: MLXArray? = nil,
     stride: Int = 1, padding: Int = 0, outputPadding: Int = 0,
     groups: Int = 1, dilation: Int = 1
@@ -109,7 +109,7 @@ public func convTranspose1d(
 
 /// Conv2d with PyTorch format conversion.
 /// Input: (N, C, H, W), Weight: (O, I, kH, kW) → MLX layout → result back to (N, C, H, W).
-public func conv2d(
+func conv2d(
     _ input: MLXArray, weight: MLXArray, bias: MLXArray? = nil,
     stride: (Int, Int) = (1, 1), padding: (Int, Int) = (0, 0),
     dilation: (Int, Int) = (1, 1), groups: Int = 1
@@ -138,7 +138,7 @@ public func conv2d(
 
 /// ConvTranspose2d with PyTorch format conversion.
 /// Input: (N, C, H, W), Weight: (C_in, C_out, kH, kW) → MLX layout → result back to (N, C, H, W).
-public func convTranspose2d(
+func convTranspose2d(
     _ input: MLXArray, weight: MLXArray, bias: MLXArray? = nil,
     stride: (Int, Int) = (1, 1), padding: (Int, Int) = (0, 0),
     outputPadding: (Int, Int) = (0, 0), groups: Int = 1,
@@ -169,7 +169,7 @@ public func convTranspose2d(
 
 /// GroupNorm matching PyTorch's nn.GroupNorm.
 /// Input shape: (N, C, ...) where C is divisible by numGroups.
-public func groupNorm(
+func groupNorm(
     _ x: MLXArray, weight: MLXArray, bias: MLXArray,
     numGroups: Int, eps: Float = 1e-5
 ) -> MLXArray {

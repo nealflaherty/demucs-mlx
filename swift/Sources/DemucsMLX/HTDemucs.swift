@@ -6,42 +6,42 @@ import Foundation
 
 /// HTDemucs - Hybrid Transformer Demucs model.
 /// Extends HDemucs with cross-transformer layers between frequency and time branches.
-public struct HTDemucsModel {
+struct HTDemucsModel {
 
     // Model parameters
-    public let sources: [String]
-    public let audioChannels: Int
-    public let channels: Int
-    public let depth: Int
-    public let nfft: Int
-    public let hopLength: Int
-    public let cac: Bool
-    public let stride_: Int
-    public let kernelSize: Int
-    public let samplerate: Int
-    public let segment: Float
-    public let freqEmbScale: Float
-    public let bottomChannels: Int
+    let sources: [String]
+    let audioChannels: Int
+    let channels: Int
+    let depth: Int
+    let nfft: Int
+    let hopLength: Int
+    let cac: Bool
+    let stride_: Int
+    let kernelSize: Int
+    let samplerate: Int
+    let segment: Float
+    let freqEmbScale: Float
+    let bottomChannels: Int
 
     // Layers
-    public var encoder: [HEncLayer]
-    public var decoder: [HDecLayer]
-    public var tencoder: [HEncLayer]
-    public var tdecoder: [HDecLayer]
-    public var freqEmb: ScaledEmbedding?
-    public var crossTransformer: CrossTransformerEncoder?
+    var encoder: [HEncLayer]
+    var decoder: [HDecLayer]
+    var tencoder: [HEncLayer]
+    var tdecoder: [HDecLayer]
+    var freqEmb: ScaledEmbedding?
+    var crossTransformer: CrossTransformerEncoder?
 
     // Channel up/downsampler weights
-    public var channelUpsamplerWeight: MLXArray
-    public var channelUpsamplerBias: MLXArray
-    public var channelUpsamplerTWeight: MLXArray
-    public var channelUpsamplerTBias: MLXArray
-    public var channelDownsamplerWeight: MLXArray
-    public var channelDownsamplerBias: MLXArray
-    public var channelDownsamplerTWeight: MLXArray
-    public var channelDownsamplerTBias: MLXArray
+    var channelUpsamplerWeight: MLXArray
+    var channelUpsamplerBias: MLXArray
+    var channelUpsamplerTWeight: MLXArray
+    var channelUpsamplerTBias: MLXArray
+    var channelDownsamplerWeight: MLXArray
+    var channelDownsamplerBias: MLXArray
+    var channelDownsamplerTWeight: MLXArray
+    var channelDownsamplerTBias: MLXArray
 
-    public init(
+    init(
         sources: [String] = ["drums", "bass", "other", "vocals"],
         audioChannels: Int = 2, channels: Int = 48, channelsTime: Int = -1,
         growth: Float = 2.0, nfft: Int = 4096, cac: Bool = true,
@@ -207,7 +207,7 @@ public struct HTDemucsModel {
 
     // MARK: - STFT helpers
 
-    public func spec(_ x: MLXArray) -> MLXArray {
+    func spec(_ x: MLXArray) -> MLXArray {
         let lastDim = x.shape[x.ndim - 1]
         let le = (lastDim + hopLength - 1) / hopLength
         let padL = hopLength / 2 * 3
@@ -221,7 +221,7 @@ public struct HTDemucsModel {
         return z
     }
 
-    public func ispec(_ z: MLXArray, length: Int) -> MLXArray {
+    func ispec(_ z: MLXArray, length: Int) -> MLXArray {
         // Add back last freq bin (zeros)
         let freqShape = z.shape
         var padWidths = [(Int, Int)](repeating: (0, 0), count: freqShape.count)
@@ -239,7 +239,7 @@ public struct HTDemucsModel {
         return x
     }
 
-    public func magnitude(_ z: MLXArray) -> MLXArray {
+    func magnitude(_ z: MLXArray) -> MLXArray {
         if cac {
             let realPart = z.realPart()
             let imagPart = z.imaginaryPart()
@@ -253,7 +253,7 @@ public struct HTDemucsModel {
         }
     }
 
-    public func mask(_ z: MLXArray, _ m: MLXArray) -> MLXArray {
+    func mask(_ z: MLXArray, _ m: MLXArray) -> MLXArray {
         if cac {
             let B = m.shape[0], S = m.shape[1], Fr = m.shape[3], T = m.shape[4]
             let C = m.shape[2] / 2
@@ -272,7 +272,7 @@ public struct HTDemucsModel {
 
     // MARK: - Forward pass
 
-    public mutating func forward(_ mix: MLXArray) -> MLXArray {
+    mutating func forward(_ mix: MLXArray) -> MLXArray {
         var length = mix.shape[mix.ndim - 1]
         var lengthPrePad = -1
         let trainingLength = Int(segment * Float(samplerate))

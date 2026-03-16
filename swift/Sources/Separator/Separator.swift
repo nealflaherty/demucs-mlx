@@ -7,7 +7,7 @@ import Foundation
 import MLX
 
 @main
-struct Separator: ParsableCommand {
+struct SeparatorCLI: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "demucs-separate",
         abstract: "Separate audio into stems using HTDemucs"
@@ -78,11 +78,9 @@ struct Separator: ParsableCommand {
     // MARK: - Run
 
     func run() throws {
-        let sources = ["drums", "bass", "other", "vocals"]
-
         // Validate two-stems
-        if let stem = twoStems, !sources.contains(stem) {
-            print("Error: stem \"\(stem)\" not in model. Must be one of: \(sources.joined(separator: ", "))")
+        if let stem = twoStems, !defaultSources.contains(stem) {
+            print("Error: stem \"\(stem)\" not in model. Must be one of: \(defaultSources.joined(separator: ", "))")
             throw ExitCode.failure
         }
 
@@ -95,22 +93,11 @@ struct Separator: ParsableCommand {
         else { format = "wav"; codec = "" }
 
         let bitsPerSample = int24 ? 24 : 16
+        let fileExt = (codec == "alac") ? "m4a" : format
 
-        // Create model
-        var htModel = HTDemucsModel(
-            sources: sources, audioChannels: 2, channels: 48,
-            channelsTime: -1, growth: 2.0, nfft: 4096, cac: true,
-            depth: 4, rewrite: true, freqEmb: 0.2, embScale: 10.0,
-            embSmooth: true, kernelSize: 8, timeStride: 2, stride: 4,
-            context: 1, contextEnc: 0, normStarts: 4, normGroups: 4,
-            dconvMode: 3, dconvComp: 8, dconvInit: 1e-3,
-            bottomChannels: 512, tLayers: 5, tHeads: 8,
-            tHiddenScale: 4.0, tNormIn: true, tNormOut: true,
-            tCrossFirst: false, tLayerScale: true, tGelu: true,
-            samplerate: 44100, segment: 7.8
-        )
+        // Create separator and load model
+        let separator = Separator()
 
-        // Load weights
         guard FileManager.default.fileExists(atPath: model) else {
             print("Error: model file not found: \(model)")
             print("\nDownload the model first or specify a path with --model <path>")
@@ -118,10 +105,7 @@ struct Separator: ParsableCommand {
         }
 
         print("Loading model weights from \(model)...")
-        guard WeightLoader.loadHTDemucs(&htModel, from: model) else {
-            print("Failed to load weights!")
-            throw ExitCode.failure
-        }
+        try separator.loadModel(from: model)
         print("Model loaded.")
 
         // Create output directory
@@ -129,7 +113,14 @@ struct Separator: ParsableCommand {
             withIntermediateDirectories: true)
         print("Separated tracks will be stored in \(outDir)")
 
-        let fileExt = (codec == "alac") ? "m4a" : format
+        let options = SeparationOptions(
+            shifts: shifts,
+            split: !noSplit,
+            overlap: overlap,
+            transitionPower: 1.0,
+            segment: segment,
+            clipMode: clipMode
+        )
 
         for trackPath in tracks {
             guard FileManager.default.fileExists(atPath: trackPath) else {
@@ -139,86 +130,61 @@ struct Separator: ParsableCommand {
 
             print("Separating track \(trackPath)")
 
-            guard let audio = AudioIO.load(trackPath, targetSampleRate: 44100) else {
-                print("Failed to load audio: \(trackPath)")
-                continue
-            }
-
-            // Normalize: ref = wav.mean(0); wav = (wav - ref.mean()) / (ref.std() + 1e-8)
-            let ref = audio.mean(axis: 0)
-            let refMean = ref.mean()
-            let refStd = MLX.sqrt(ref.variance(ddof: 1))
-            eval(refMean); eval(refStd)
-
-            var audioNorm = (audio - refMean) / (refStd + MLXArray(Float(1e-8)))
-            eval(audioNorm)
-
-            let mix = expandedDimensions(audioNorm, axis: 0)
-
-            print("Running separation...")
-            var result = applyModel(&htModel, mix: mix, shifts: shifts,
-                                    split: !noSplit, overlap: overlap,
-                                    transitionPower: 1.0, segment: segment)
-            eval(result)
-
-            // Denormalize
-            result = result * (refStd + MLXArray(Float(1e-8))) + refMean
-            eval(result)
-
-            // Also denormalize original for minus method
-            audioNorm = audioNorm * (refStd + MLXArray(Float(1e-8))) + refMean
+            let result = try separator.separate(
+                file: URL(fileURLWithPath: trackPath),
+                options: options
+            )
 
             // Parse track name
             let trackURL = URL(fileURLWithPath: trackPath)
             let trackName = trackURL.deletingPathExtension().lastPathComponent
             let trackExtStr = String(trackURL.pathExtension)
 
-            let outLength = result.shape[result.ndim - 1]
-
             if let stem = twoStems {
                 // Two-stems mode
-                let stemIdx = sources.firstIndex(of: stem)!
-                let selected = sliceAxis(result, axis: 1, start: stemIdx, end: stemIdx + 1)
-                    .squeezed(axes: [0, 1])
+                guard let selected = result.stem(named: stem) else {
+                    print("Error: stem \(stem) not found in result")
+                    continue
+                }
 
                 let stemPath = outDir + "/" + formatFilename(filename,
                     track: trackName, trackext: trackExtStr, stem: stem, ext: fileExt)
                 createParentDirs(stemPath)
-                saveStem(selected, path: stemPath, bitsPerSample: bitsPerSample,
-                         asFloat: float32, bitrate: bitrate, codec: codec)
+                _ = AudioIO.save(stemPath, audio: selected.audio,
+                                 sampleRate: 44100, bitsPerSample: bitsPerSample,
+                                 asFloat: float32, bitrate: bitrate, codec: codec)
 
-                if otherMethod == "minus" {
-                    let complement = audioNorm - selected
-                    let compPath = outDir + "/" + formatFilename(filename,
-                        track: trackName, trackext: trackExtStr, stem: "no_\(stem)", ext: fileExt)
-                    createParentDirs(compPath)
-                    saveStem(complement, path: compPath, bitsPerSample: bitsPerSample,
-                             asFloat: float32, bitrate: bitrate, codec: codec)
-                } else if otherMethod == "add" {
-                    var complement = MLXArray.zeros([2, outLength])
-                    for s in 0..<sources.count where s != stemIdx {
-                        let other = sliceAxis(result, axis: 1, start: s, end: s + 1)
-                            .squeezed(axes: [0, 1])
-                        complement = complement + other
+                if otherMethod != "none" {
+                    // Compute complement by summing all other stems
+                    var complement = MLXArray.zeros([2, selected.audio.shape[1]])
+                    if otherMethod == "minus" {
+                        // Load original audio and subtract
+                        if let audio = AudioIO.load(trackPath, targetSampleRate: 44100) {
+                            complement = audio - selected.audio
+                        }
+                    } else {
+                        // "add" — sum all non-selected stems
+                        for s in result.stems where s.name != stem {
+                            complement = complement + s.audio
+                        }
                     }
                     eval(complement)
                     let compPath = outDir + "/" + formatFilename(filename,
                         track: trackName, trackext: trackExtStr, stem: "no_\(stem)", ext: fileExt)
                     createParentDirs(compPath)
-                    saveStem(complement, path: compPath, bitsPerSample: bitsPerSample,
-                             asFloat: float32, bitrate: bitrate, codec: codec)
+                    _ = AudioIO.save(compPath, audio: complement,
+                                     sampleRate: 44100, bitsPerSample: bitsPerSample,
+                                     asFloat: float32, bitrate: bitrate, codec: codec)
                 }
             } else {
                 // Save all stems
-                for (s, name) in sources.enumerated() {
-                    let source = sliceAxis(result, axis: 1, start: s, end: s + 1)
-                        .squeezed(axes: [0, 1])
-                    
+                for stem in result.stems {
                     let stemPath = outDir + "/" + formatFilename(filename,
-                        track: trackName, trackext: trackExtStr, stem: name, ext: fileExt)
+                        track: trackName, trackext: trackExtStr, stem: stem.name, ext: fileExt)
                     createParentDirs(stemPath)
-                    saveStem(source, path: stemPath, bitsPerSample: bitsPerSample,
-                             asFloat: float32, bitrate: bitrate, codec: codec)
+                    _ = AudioIO.save(stemPath, audio: stem.audio,
+                                     sampleRate: 44100, bitsPerSample: bitsPerSample,
+                                     asFloat: float32, bitrate: bitrate, codec: codec)
                 }
             }
 
@@ -240,15 +206,5 @@ struct Separator: ParsableCommand {
     private func createParentDirs(_ path: String) {
         let url = URL(fileURLWithPath: path).deletingLastPathComponent()
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-    }
-
-    private func saveStem(_ source: MLXArray, path: String,
-                          bitsPerSample: Int, asFloat: Bool,
-                          bitrate: Int, codec: String) {
-        let clipped = preventClip(source, mode: clipMode)
-        eval(clipped)
-        _ = AudioIO.save(path, audio: clipped, sampleRate: 44100,
-                         bitsPerSample: bitsPerSample, asFloat: asFloat,
-                         bitrate: bitrate, codec: codec)
     }
 }

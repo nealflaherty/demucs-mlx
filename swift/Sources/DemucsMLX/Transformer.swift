@@ -7,7 +7,7 @@ import Foundation
 // MARK: - Sinusoidal Embeddings
 
 /// Create 1D sinusoidal positional embedding of shape (length, 1, dim).
-public func createSinEmbedding(length: Int, dim: Int, shift: Int = 0,
+func createSinEmbedding(length: Int, dim: Int, shift: Int = 0,
                                 maxPeriod: Float = 10000.0) -> MLXArray {
     let pos = MLXArray(Array(Swift.stride(from: Float(shift), to: Float(shift + length), by: 1)))
         .reshaped(length, 1, 1)
@@ -24,7 +24,7 @@ public func createSinEmbedding(length: Int, dim: Int, shift: Int = 0,
 }
 
 /// Create 2D sinusoidal positional embedding of shape (1, dModel, height, width).
-public func create2DSinEmbedding(dModel: Int, height: Int, width: Int,
+func create2DSinEmbedding(dModel: Int, height: Int, width: Int,
                                   maxPeriod: Float = 10000.0) -> MLXArray {
     precondition(dModel % 4 == 0)
 
@@ -73,14 +73,14 @@ public func create2DSinEmbedding(dModel: Int, height: Int, width: Int,
 // MARK: - MyGroupNorm
 
 /// GroupNorm that expects (B, T, C) format.
-public struct MyGroupNorm {
-    public var weight: MLXArray
-    public var bias: MLXArray
+struct MyGroupNorm {
+    var weight: MLXArray
+    var bias: MLXArray
     let numGroups: Int
     let eps: Float
     let layerNormMode: Bool
 
-    public init(numGroups: Int, numChannels: Int, eps: Float = 1e-5,
+    init(numGroups: Int, numChannels: Int, eps: Float = 1e-5,
                 layerNormMode: Bool = false) {
         self.numGroups = numGroups
         self.eps = eps
@@ -89,7 +89,7 @@ public struct MyGroupNorm {
         self.bias = MLXArray.zeros([numChannels])
     }
 
-    public func forward(_ x: MLXArray) -> MLXArray {
+    func forward(_ x: MLXArray) -> MLXArray {
         if layerNormMode {
             let mean = x.mean(axes: [-1], keepDims: true)
             let variance = x.variance(axes: [-1], keepDims: true)
@@ -104,27 +104,27 @@ public struct MyGroupNorm {
 
 // MARK: - MyTransformerEncoderLayer
 
-public struct MyTransformerEncoderLayer {
-    public var selfAttnInProjWeight: MLXArray
-    public var selfAttnInProjBias: MLXArray
-    public var selfAttnOutProjWeight: MLXArray
-    public var selfAttnOutProjBias: MLXArray
-    public var linear1Weight: MLXArray
-    public var linear1Bias: MLXArray
-    public var linear2Weight: MLXArray
-    public var linear2Bias: MLXArray
-    public var norm1: MyGroupNorm
-    public var norm2: MyGroupNorm
-    public var normOut: MyGroupNorm?
-    public var gamma1: LayerScale?
-    public var gamma2: LayerScale?
+struct MyTransformerEncoderLayer {
+    var selfAttnInProjWeight: MLXArray
+    var selfAttnInProjBias: MLXArray
+    var selfAttnOutProjWeight: MLXArray
+    var selfAttnOutProjBias: MLXArray
+    var linear1Weight: MLXArray
+    var linear1Bias: MLXArray
+    var linear2Weight: MLXArray
+    var linear2Bias: MLXArray
+    var norm1: MyGroupNorm
+    var norm2: MyGroupNorm
+    var normOut: MyGroupNorm?
+    var gamma1: LayerScale?
+    var gamma2: LayerScale?
 
     let dModel: Int
     let nHead: Int
     let useGelu: Bool
     let normFirst: Bool
 
-    public init(dModel: Int, nHead: Int, dimFeedforward: Int = 2048,
+    init(dModel: Int, nHead: Int, dimFeedforward: Int = 2048,
                 useGelu: Bool = true, groupNormGroups: Int = 0,
                 normFirst: Bool = false, normOut: Bool = false,
                 layerScale: Bool = false, initValues: Float = 1e-4) {
@@ -159,7 +159,7 @@ public struct MyTransformerEncoderLayer {
         }
     }
 
-    public func forward(_ src: MLXArray) -> MLXArray {
+    func forward(_ src: MLXArray) -> MLXArray {
         var x = src
         if normFirst {
             var saOut = saBlock(norm1.forward(x))
@@ -211,32 +211,32 @@ public struct MyTransformerEncoderLayer {
 
 // MARK: - CrossTransformerEncoderLayer
 
-public struct CrossTransformerEncoderLayer {
-    public var crossAttnQProjWeight: MLXArray
-    public var crossAttnQProjBias: MLXArray
-    public var crossAttnKProjWeight: MLXArray
-    public var crossAttnKProjBias: MLXArray
-    public var crossAttnVProjWeight: MLXArray
-    public var crossAttnVProjBias: MLXArray
-    public var crossAttnOutProjWeight: MLXArray
-    public var crossAttnOutProjBias: MLXArray
-    public var linear1Weight: MLXArray
-    public var linear1Bias: MLXArray
-    public var linear2Weight: MLXArray
-    public var linear2Bias: MLXArray
-    public var norm1: MyGroupNorm
-    public var norm2: MyGroupNorm
-    public var norm3: MyGroupNorm
-    public var normOut: MyGroupNorm?
-    public var gamma1: LayerScale?
-    public var gamma2: LayerScale?
+struct CrossTransformerEncoderLayer {
+    var crossAttnQProjWeight: MLXArray
+    var crossAttnQProjBias: MLXArray
+    var crossAttnKProjWeight: MLXArray
+    var crossAttnKProjBias: MLXArray
+    var crossAttnVProjWeight: MLXArray
+    var crossAttnVProjBias: MLXArray
+    var crossAttnOutProjWeight: MLXArray
+    var crossAttnOutProjBias: MLXArray
+    var linear1Weight: MLXArray
+    var linear1Bias: MLXArray
+    var linear2Weight: MLXArray
+    var linear2Bias: MLXArray
+    var norm1: MyGroupNorm
+    var norm2: MyGroupNorm
+    var norm3: MyGroupNorm
+    var normOut: MyGroupNorm?
+    var gamma1: LayerScale?
+    var gamma2: LayerScale?
 
     let dModel: Int
     let nHead: Int
     let useGelu: Bool
     let normFirst: Bool
 
-    public init(dModel: Int, nHead: Int, dimFeedforward: Int = 2048,
+    init(dModel: Int, nHead: Int, dimFeedforward: Int = 2048,
                 useGelu: Bool = true, groupNormGroups: Int = 0,
                 normFirst: Bool = false, normOut: Bool = false,
                 layerScale: Bool = false, initValues: Float = 1e-4) {
@@ -277,7 +277,7 @@ public struct CrossTransformerEncoderLayer {
         }
     }
 
-    public func forward(_ q: MLXArray, _ k: MLXArray) -> MLXArray {
+    func forward(_ q: MLXArray, _ k: MLXArray) -> MLXArray {
         var x = q
         if normFirst {
             var caOut = caBlock(norm1.forward(q), norm2.forward(k))
@@ -329,20 +329,20 @@ public struct CrossTransformerEncoderLayer {
 
 // MARK: - CrossTransformerEncoder
 
-public struct CrossTransformerEncoder {
-    public var classicLayers: [MyTransformerEncoderLayer]
-    public var classicLayersT: [MyTransformerEncoderLayer]
-    public var crossLayers: [CrossTransformerEncoderLayer]
-    public var crossLayersT: [CrossTransformerEncoderLayer]
-    public var normIn: MyGroupNorm?
-    public var normInT: MyGroupNorm?
+struct CrossTransformerEncoder {
+    var classicLayers: [MyTransformerEncoderLayer]
+    var classicLayersT: [MyTransformerEncoderLayer]
+    var crossLayers: [CrossTransformerEncoderLayer]
+    var crossLayersT: [CrossTransformerEncoderLayer]
+    var normIn: MyGroupNorm?
+    var normInT: MyGroupNorm?
 
     let numLayers: Int
     let classicParity: Int
     let maxPeriod: Float
     let weightPosEmbed: Float
 
-    public init(dim: Int, hiddenScale: Float = 4.0, numHeads: Int = 8,
+    init(dim: Int, hiddenScale: Float = 4.0, numHeads: Int = 8,
                 numLayers: Int = 6, crossFirst: Bool = false,
                 normIn: Bool = true, groupNorm: Int = 0,
                 normFirst: Bool = false, normOut: Bool = false,
@@ -392,7 +392,7 @@ public struct CrossTransformerEncoder {
         self.crossLayersT = crossT
     }
 
-    public func forward(_ x: MLXArray, _ xt: MLXArray) -> (MLXArray, MLXArray) {
+    func forward(_ x: MLXArray, _ xt: MLXArray) -> (MLXArray, MLXArray) {
         let B = x.shape[0], C = x.shape[1], Fr = x.shape[2], T1 = x.shape[3]
 
         // 2D positional embedding for freq branch
